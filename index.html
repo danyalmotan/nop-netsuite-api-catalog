@@ -1,0 +1,414 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nopcommerce Integration WebAPI Endpoint Catalog</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .container-narrow { max-width: 1220px; }
+    .small-muted { font-size: 0.92em; color: #6c757d; }
+    .pill { display: inline-block; padding: .15em .5em; border-radius: 999px; font-size: .78em; border: 1px solid #dee2e6; background: #fff; }
+    .pill-method { font-weight: 650; color: #fff; }
+    .pill-method-get { background: #198754; border-color: #198754; }
+    .pill-method-post { background: #0d6efd; border-color: #0d6efd; }
+    .pill-method-put { background: #fd7e14; border-color: #fd7e14; }
+    .pill-method-patch { background: #6f42c1; border-color: #6f42c1; }
+    .pill-method-delete { background: #dc3545; border-color: #dc3545; }
+    .dir { background: #fff3cd; border-color: #ffe69c; }
+    .ver { background: #e7f1ff; border-color: #b6d4fe; }
+    .approval { background: #f8d7da; border-color: #f1aeb5; }
+    .scope { background: #d1e7dd; border-color: #a3cfbb; }
+    .idemp { background: #e2d9f3; border-color: #c5b3e6; }
+    .status-badge { font-size: .72em; padding: .1em .4em; border-radius: .3em; font-weight: 600; margin-left: .25rem; }
+    .status-2xx { background: #d1e7dd; color: #0a3622; }
+    .status-4xx { background: #f8d7da; color: #58151c; }
+    .status-5xx { background: #e2d9f3; color: #3b1f6e; }
+    .badge-soft { background: #fff; border: 1px solid #dee2e6; color: #212529; font-weight: 500; }
+    .badge-required { background: #d1e7dd; border: 1px solid #a3cfbb; color: #0a3622; font-weight: 600; }
+    .badge-optional { background: #f0f0f0; border: 1px solid #d5d5d5; color: #6c757d; font-weight: 500; }
+    .badge-ns-required { background: #0d6efd; border: 1px solid #0a58ca; color: #fff; font-weight: 600; font-size: .68em; }
+    .badge-ns-optional { background: #e7f1ff; border: 1px solid #b6d4fe; color: #084298; font-weight: 500; font-size: .68em; }
+    .badge-nop-internal { background: #f8f9fa; border: 1px solid #dee2e6; color: #6c757d; font-weight: 500; font-size: .68em; font-style: italic; }
+    .badge-auto-generated { background: #e2d9f3; border: 1px solid #c5b3e6; color: #3b1f6e; font-weight: 500; font-size: .68em; }
+    .col-contract { display: none; }
+    body.show-contracts .col-contract { display: table-cell; }
+    body.show-contracts .row-nop-internal { opacity: 0.5; }
+    body.dark-mode .badge-ns-required { background: #0d6efd; border-color: #3d8bfd; color: #fff; }
+    body.dark-mode .badge-ns-optional { background: #0a2a4a; border-color: #1a3a5c; color: #90caf9; }
+    body.dark-mode .badge-nop-internal { background: #1a1a2e; border-color: #2a3a5c; color: #666; }
+    body.dark-mode .badge-auto-generated { background: #2a1a4a; border-color: #3a2a5c; color: #c5b3e6; }
+    .ep-count-badge { font-size: .72em; background: #6c757d; color: #fff; border-radius: 999px; padding: .15em .55em; margin-left: .5rem; vertical-align: middle; }
+    .field-table th { white-space: nowrap; }
+    .field-required { font-weight: 650; }
+    .field-diff { background: #fff3cd !important; border-left: 3px solid #fd7e14 !important; }
+    mark { padding: 0 .15em; border-radius: .2em; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.88em; }
+    .card-endpoint { border: 1px solid #e0e4e8; border-left: 4px solid #6c757d; background: #f4f6f9; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .card-endpoint .card-header { border-bottom: 1px solid #e0e4e8; background: #edf0f5; }
+    .card-endpoint .card-body { background: #f4f6f9; }
+    .card-endpoint + .card-endpoint { margin-top: .75rem; }
+
+    /* Header zone cards */
+    .header-zone { background: #e8f0fe; border-color: #b6d4fe; }
+    .header-zone .card-body { background: #e8f0fe; }
+    .header-info { font-size: 0.82em; }
+    .header-info code { font-size: 0.8em; background: #f1f3f5; padding: .1em .3em; border-radius: .25em; }
+    .idempotency-recipe { font-size: 0.85em; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: .4em; padding: .5em .75em; margin-top: .5em; }
+    .idempotency-recipe code { background: #e9ecef; padding: .1em .3em; border-radius: .2em; }
+    .legend-box { font-size: .82em; }
+    .legend-box .pill { margin-right: .25rem; margin-bottom: .25rem; }
+    /* Move chevron to left on endpoint-level accordion buttons */
+    .card-endpoint .accordion-button { flex-direction: row-reverse; justify-content: flex-end; gap: .5em; }
+    .card-endpoint .accordion-button::after { margin-left: 0; margin-right: 0; flex-shrink: 0; }
+
+    .anchor-link { font-size: .78em; color: #6c757d; text-decoration: none; margin-left: .3rem; opacity: 0; transition: opacity .2s; }
+    .card-endpoint:hover .anchor-link { opacity: 1; }
+    .anchor-link:hover { color: #0d6efd; }
+    .copy-curl-btn { font-size: .72em; padding: .15em .4em; cursor: pointer; }
+    .copy-curl-btn.copied { background: #198754; color: #fff; border-color: #198754; }
+    .sticky-search { position: sticky; top: 0; z-index: 1050; }
+    .sticky-search .card-body { padding: .35rem .75rem; }
+    .sticky-search .form-control-lg { font-size: .88em; padding: .25rem .55rem; height: auto; }
+    .sticky-search .form-select { font-size: .82em; padding: .25rem .5rem; height: auto; }
+    .sticky-search .btn { font-size: .8em; padding: .2rem .5rem; }
+    .sticky-search .header-info { margin-top: .25rem; font-size: .76em; }
+    .sticky-search .kbd-hint { margin-top: .1em; }
+    .accordion-item .accordion-header.pinned-header { position: sticky; top: 0; z-index: 1040; transition: top .1s ease; }
+    .accordion-item .accordion-header.pinned-header .accordion-button { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+    body.dark-mode .accordion-item .accordion-header.pinned-header .accordion-button { box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+    .jump-to-dropdown { font-size: .85em; max-width: 220px; }
+    .kbd-hint { font-size: .7em; color: #adb5bd; float: right; margin-top: .35em; display:none; }
+    .kbd-hint kbd { background: #e9ecef; color: #495057; padding: .1em .3em; border-radius: .2em; font-size: .9em; border: 1px solid #dee2e6; }
+
+    /* Floating settings panel */
+    .settings-fab {
+      position: fixed; left: 12px; bottom: 12px; z-index: 1060;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #0d6efd; color: #fff; border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2em; transition: transform .2s;
+    }
+    .settings-fab:hover { transform: scale(1.1); }
+    .settings-panel {
+      position: fixed; left: 12px; bottom: 62px; z-index: 1060;
+      background: #fff; border: 1px solid #dee2e6; border-radius: .5rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15); padding: .75rem 1rem;
+      width: 210px; display: none;
+    }
+    .settings-panel.open { display: block; }
+    .settings-panel h6 { font-size: .78em; text-transform: uppercase; color: #6c757d; margin-bottom: .4em; letter-spacing: .04em; }
+    .settings-panel .btn-group .btn { font-size: .75em; padding: .2em .5em; }
+    .settings-panel .form-check-label { font-size: .82em; }
+    .settings-divider { border-top: 1px solid #e9ecef; margin: .5rem 0; }
+
+    /* Data type column toggle */
+    .col-type { display: none; }
+    body.show-types .col-type { display: table-cell; }
+
+    /* Width mode */
+    body.full-width .container-narrow { max-width: 100%; }
+
+    /* Example payload styles */
+    .example-payload-toggle { font-size: 0.82em; }
+    .example-payload-block { display: none; margin-top: .75rem; }
+    .example-payload-block.open { display: block; }
+    .example-payload-block h6 { font-size: .85em; color: #495057; margin-bottom: .3rem; }
+    .example-payload-block pre { background: #1e1e2e; color: #cdd6f4; border-radius: .5em; padding: .75em 1em; font-size: 0.82em; overflow-x: auto; max-height: 500px; margin-bottom: .75rem; position: relative; }
+    .example-payload-block .payload-comment { font-size: .78em; color: #6c757d; font-style: italic; margin-bottom: .4rem; }
+    .payload-version-tabs { display: flex; gap: 0; margin-bottom: .75rem; }
+    .payload-version-tabs .payload-ver-btn { font-size: 0.8em; padding: .3em .9em; border: 1px solid #dee2e6; background: #f8f9fa; color: #495057; cursor: pointer; transition: all .15s; }
+    .payload-version-tabs .payload-ver-btn:first-child { border-radius: .4em 0 0 .4em; }
+    .payload-version-tabs .payload-ver-btn:last-child { border-radius: 0 .4em .4em 0; border-left: none; }
+    .payload-version-tabs .payload-ver-btn.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+    .payload-ver-pane { display: none; }
+    .payload-ver-pane.active { display: block; }
+    .payload-identical-note { font-size: .76em; color: #6c757d; font-style: italic; margin-bottom: .5rem; }
+
+    /* Font size presets */
+    body.fs-xs  { font-size: 12px; }
+    body.fs-sm  { font-size: 13px; }
+    body.fs-md  { font-size: 15px; }
+    body.fs-lg  { font-size: 17px; }
+
+    /* Dark mode */
+    body.dark-mode { background: #1a1a2e; color: #e0e0e0; }
+    body.dark-mode .card, body.dark-mode .card-endpoint, body.dark-mode .settings-panel { background: #16213e; border-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .card-header { background: #16213e !important; border-color: #2a3a5c; }
+    body.dark-mode .card-endpoint { background: #1a2744; border-color: #2a3a5c; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+    body.dark-mode .card-endpoint .card-header { background: #1e2d50 !important; }
+    body.dark-mode .card-endpoint .card-body { background: #1a2744; }
+    body.dark-mode .header-zone { background: #0f2040; border-color: #1a3a5c; }
+    body.dark-mode .header-zone .card-body { background: #0f2040; }
+    body.dark-mode .accordion-item { background: #16213e; border-color: #2a3a5c; --bs-accordion-color: #e0e0e0; --bs-accordion-bg: #16213e; --bs-accordion-btn-color: #e0e0e0; --bs-accordion-active-color: #90caf9; --bs-accordion-active-bg: #1a2744; }
+    body.dark-mode .accordion-button { background: #16213e; color: #e0e0e0; }
+    body.dark-mode .accordion-button:not(.collapsed) { background: #1a2744; color: #90caf9; }
+    body.dark-mode .form-control, body.dark-mode .form-select { background: #0f3460; border-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .form-control::placeholder { color: #7a8ba8; }
+    body.dark-mode .table { --bs-table-color: #e0e0e0; --bs-table-bg: transparent; --bs-table-border-color: #2a3a5c; --bs-table-striped-color: #e0e0e0; --bs-table-striped-bg: rgba(255,255,255,.03); --bs-table-hover-color: #e0e0e0; --bs-table-hover-bg: rgba(255,255,255,.05); color: #e0e0e0; }
+    body.dark-mode .table th, body.dark-mode .table td { color: #e0e0e0; }
+    body.dark-mode .small-muted { color: #b0bec5; }
+    body.dark-mode code { background: #0f3460; color: #90caf9; }
+    body.dark-mode .btn-outline-secondary { color: #90caf9; border-color: #2a3a5c; }
+    body.dark-mode .pill { background: #1a2744; border-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .field-diff { background: #332b00 !important; border-left: 3px solid #fd7e14 !important; }
+    body.dark-mode mark { background: #665500; color: #ffd700; }
+    body.dark-mode .kbd-hint kbd { background: #2a3a5c; color: #90caf9; border-color: #3a4a6c; }
+    body.dark-mode .idempotency-recipe { background: #1a2744; border-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .idempotency-recipe code { background: #0f3460; color: #90caf9; }
+    body.dark-mode .table-responsive { background: transparent; color: #e0e0e0; }
+    body.dark-mode .table > :not(caption) > * > * { background-color: transparent; border-bottom-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .badge-soft { background: #1a2744; border-color: #2a3a5c; color: #e0e0e0; }
+    body.dark-mode .badge-required { background: #0a3622; border-color: #1a4a32; color: #a3cfbb; }
+    body.dark-mode .badge-optional { background: #2a2a2a; border-color: #3a3a3a; color: #999; }
+    body.dark-mode .settings-divider { border-top-color: #2a3a5c; }
+    body.dark-mode .header-info code { background: #0f3460; color: #90caf9; }
+    body.dark-mode .example-payload-block h6 { color: #90caf9; }
+    body.dark-mode .payload-version-tabs .payload-ver-btn { background: #1a2744; border-color: #2a3a5c; color: #b0bec5; }
+    body.dark-mode .payload-version-tabs .payload-ver-btn.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+    body.dark-mode .payload-comment { color: #b0bec5; }
+    body.dark-mode .payload-identical-note { color: #b0bec5; }
+    body.dark-mode .status-badge.status-2xx { background: #0a3622; color: #a3cfbb; }
+    body.dark-mode .status-badge.status-4xx { background: #58151c; color: #f1aeb5; }
+    body.dark-mode .status-badge.status-5xx { background: #3b1f6e; color: #c5b3e6; }
+    body.dark-mode .dir { background: #332b00; border-color: #665500; color: #ffd700; }
+    body.dark-mode .ver { background: #0a2a4a; border-color: #1a3a5c; color: #90caf9; }
+    body.dark-mode .approval { background: #4a1520; border-color: #6a2530; color: #f1aeb5; }
+    body.dark-mode .scope { background: #0a3622; border-color: #1a4a32; color: #a3cfbb; }
+    body.dark-mode .idemp { background: #2a1a4a; border-color: #3a2a5c; color: #c5b3e6; }
+    body.dark-mode .copy-curl-btn { color: #90caf9; border-color: #2a3a5c; }
+    body.dark-mode .copy-curl-btn.copied { background: #198754; color: #fff; border-color: #198754; }
+    body.dark-mode .btn-outline-primary { color: #90caf9; border-color: #2a3a5c; }
+    body.dark-mode .ep-count-badge { background: #2a3a5c; }
+    body.dark-mode .anchor-link { color: #b0bec5; }
+    body.dark-mode .anchor-link:hover { color: #90caf9; }
+
+    /* Pending approval styles */
+    .pending-approval-banner {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+      border: 2px dashed #fd7e14;
+      border-radius: .5rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .pending-approval-banner h4 { color: #856404; margin-bottom: .5rem; }
+    .pending-approval-banner .badge-pending { background: #fd7e14; color: #fff; font-size: .85em; padding: .3em .7em; border-radius: .3em; font-weight: 700; }
+    .pending-section .accordion-item { border-left: 4px dashed #fd7e14 !important; }
+    .pending-section .accordion-button { background: #fff8e1 !important; }
+    .pending-section .accordion-button:not(.collapsed) { background: #fff3cd !important; color: #856404 !important; }
+    .pending-section .card-endpoint { border-left: 4px dashed #fd7e14 !important; background: #fffdf5; }
+    .pending-section .card-endpoint .card-header { background: #fff8e1 !important; }
+    .pending-section .card-endpoint .card-body { background: #fffdf5; }
+    .pending-ep-badge { display: inline-block; background: #fd7e14; color: #fff; font-size: .68em; padding: .15em .5em; border-radius: .3em; font-weight: 700; margin-left: .5rem; vertical-align: middle; letter-spacing: .03em; }
+    .feedback-source { font-size: .78em; background: #e7f1ff; border: 1px solid #b6d4fe; color: #084298; border-radius: .3em; padding: .15em .5em; display: inline-block; margin-left: .3rem; }
+    body.dark-mode .pending-approval-banner { background: linear-gradient(135deg, #332b00 0%, #4a3d00 100%); border-color: #fd7e14; }
+    body.dark-mode .pending-approval-banner h4 { color: #ffd700; }
+    body.dark-mode .pending-section .accordion-item { border-left-color: #fd7e14 !important; }
+    body.dark-mode .pending-section .accordion-button { background: #2a2200 !important; color: #ffd700 !important; }
+    body.dark-mode .pending-section .accordion-button:not(.collapsed) { background: #332b00 !important; color: #ffd700 !important; }
+    body.dark-mode .pending-section .card-endpoint { background: #1a1800; border-left-color: #fd7e14 !important; }
+    body.dark-mode .pending-section .card-endpoint .card-header { background: #2a2200 !important; }
+    body.dark-mode .pending-section .card-endpoint .card-body { background: #1a1800; }
+    body.dark-mode .feedback-source { background: #0a2a4a; border-color: #1a3a5c; color: #90caf9; }
+
+    /* Print mode */
+    @media print { .settings-fab, .settings-panel { display: none !important; } .accordion-collapse { display: block !important; height: auto !important; } body { font-size: 11px !important; } }
+    body.print-mode .accordion-collapse { display: block !important; height: auto !important; }
+  </style>
+</head>
+<body>
+<!-- Floating settings panel -->
+<button class="settings-fab" id="settingsFab" title="Display settings (Ctrl+,)">&#x2699;</button>
+<div class="settings-panel" id="settingsPanel">
+  <h6>Layout width</h6>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="widthToggle">
+    <label class="form-check-label" for="widthToggle">Full width</label>
+  </div>
+  <div class="settings-divider"></div>
+  <h6>Field details</h6>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="typesToggle">
+    <label class="form-check-label" for="typesToggle">Show data types</label>
+  </div>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="contractToggle">
+    <label class="form-check-label" for="contractToggle">Show NS contract</label>
+  </div>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="diffToggle">
+    <label class="form-check-label" for="diffToggle">Highlight 4.60/4.90 diffs</label>
+  </div>
+  <div class="settings-divider"></div>
+  <h6>Appearance</h6>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="darkToggle">
+    <label class="form-check-label" for="darkToggle">Dark mode</label>
+  </div>
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="printToggle">
+    <label class="form-check-label" for="printToggle">Print view</label>
+  </div>
+  <div class="settings-divider"></div>
+  <h6>Font size</h6>
+  <div class="btn-group w-100" role="group">
+    <button type="button" class="btn btn-outline-secondary fs-btn" data-fs="fs-xs">XS</button>
+    <button type="button" class="btn btn-outline-secondary fs-btn" data-fs="fs-sm">S</button>
+    <button type="button" class="btn btn-outline-secondary fs-btn active" data-fs="fs-md">M</button>
+    <button type="button" class="btn btn-outline-secondary fs-btn" data-fs="fs-lg">L</button>
+  </div>
+</div>
+
+<div class="container container-narrow py-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+      <div>
+          <h1 class="h3 mb-1">Nopcommerce Integration WebAPI Endpoint Catalog</h1>
+        <div class="small-muted">
+          Authoritative endpoint catalogue aligned to BlueBridge scope.
+          <br>Base path: <code class="mono">/api/integration/v1/...</code> &nbsp;|&nbsp; Auth: <code>X-Integration-Key</code> header &nbsp;|&nbsp; All dates: ISO-8601 UTC
+        </div>
+      </div>
+      <div class="text-md-end small-muted">
+        Spec version: <strong id="specVersion">v1.5</strong> &nbsp;|&nbsp; Nopcommerce: 4.60 / 4.90
+        <br>Last updated: <strong id="lastUpdated">2026-02-27 10:10 SAST</strong>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card shadow-sm mb-2 header-zone">
+      <div class="card-body legend-box py-2">
+        <strong>Legend:</strong>
+        <span class="pill pill-method pill-method-get">GET</span>
+        <span class="pill pill-method pill-method-post">POST</span>
+        <span class="pill pill-method pill-method-put">PUT</span>
+        <span class="pill pill-method pill-method-patch">PATCH</span>
+        <span class="pill pill-method pill-method-delete">DELETE</span>
+        &nbsp;|&nbsp;
+        <span class="pill dir">direction</span>
+        <span class="pill scope">scope</span>
+        <span class="pill idemp">idempotency</span>
+        <span class="pill approval">approval required</span>
+        <span class="pill ver">versions</span>
+        &nbsp;|&nbsp;
+        <span class="status-badge status-2xx">2xx</span>
+        <span class="status-badge status-4xx">4xx</span>
+        <span class="status-badge status-5xx">5xx</span>
+        &nbsp;|&nbsp;
+        <span class="badge badge-ns-required">ERP Required</span>
+        <span class="badge badge-ns-optional">ERP Optional</span>
+        <span class="badge badge-nop-internal">Nop Internal</span>
+        <span class="badge badge-auto-generated">Auto-Gen</span>
+        <span class="small-muted ms-1">(toggle via &#x2699; &#x2192; Show NS contract)</span>
+      </div>
+    </div>
+
+    <!-- Error response schema -->
+    <div class="card shadow-sm mb-2 header-zone">
+      <div class="card-body py-2 header-info">
+        <strong>Canonical error envelope (all endpoints):</strong>
+        <code class="mono" style="font-size:.75em">{"success":false,"error":{"code":"ITEM_NOT_FOUND","message":"...","details":null},"correlationId":"..."}</code>
+        <br><span class="small-muted">Error codes: <code>ITEM_NOT_FOUND</code> <code>VARIANT_NOT_FOUND</code> <code>VALIDATION_ERROR</code> <code>DUPLICATE_IDEMPOTENCY_KEY</code> <code>APPROVAL_PENDING</code> <code>UNAUTHORIZED</code> <code>FORBIDDEN</code> <code>MODULE_DISABLED</code> <code>RFQ_NOT_SUPPORTED</code> <code>QUOTES_NOT_SUPPORTED</code> <code>INTERNAL_ERROR</code></span>
+        <br><span class="small-muted">HTTP status mapping:
+          <code>200</code> success |
+          <code>201</code> created |
+          <code>202</code> approval pending |
+          <code>400</code> bad request / validation |
+          <code>401</code> unauthorized |
+          <code>403</code> forbidden |
+          <code>404</code> not found |
+          <code>409</code> duplicate idempotency key |
+          <code>422</code> unprocessable |
+          <code>500</code> internal error |
+          <code>501</code> module disabled
+        </span>
+        <div class="mt-2">
+          <button class="btn btn-sm btn-outline-secondary" type="button" onclick="var b=document.getElementById('errorExamplesBlock');b.classList.toggle('open');this.textContent=b.classList.contains('open')?'Hide error examples':'Show error response examples'">Show error response examples</button>
+          <div class="example-payload-block" id="errorExamplesBlock">
+            <h6 class="mt-2">404 &mdash; Item not found</h6>
+            <pre>{"success":false,"error":{"code":"ITEM_NOT_FOUND","message":"No product found with SKU: NONEXIST-SKU","details":null},"correlationId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890"}</pre>
+            <h6>401 &mdash; Unauthorized</h6>
+            <pre>{"success":false,"error":{"code":"UNAUTHORIZED","message":"Invalid or missing X-Integration-Key header","details":null},"correlationId":"f1e2d3c4-b5a6-7890-abcd-ef1234567890"}</pre>
+            <h6>409 &mdash; Duplicate idempotency key</h6>
+            <pre>{"success":false,"error":{"code":"DUPLICATE_IDEMPOTENCY_KEY","message":"Idempotency-Key has already been used for a different request","details":{"originalRequestUtc":"2025-01-15T10:00:00Z","originalAction":"updated"}},"correlationId":"c3d4e5f6-a7b8-9012-cdef-123456789abc"}</pre>
+            <h6>422 &mdash; Validation error</h6>
+            <pre>{"success":false,"error":{"code":"VALIDATION_ERROR","message":"One or more validation errors occurred","details":[{"field":"name","message":"Name is required"},{"field":"price","message":"Price must be >= 0"}]},"correlationId":"d4e5f6a7-b8c9-0123-def1-23456789abcd"}</pre>
+            <h6>202 &mdash; Approval pending (success with staging)</h6>
+            <pre>{"success":true,"data":{"status":"PENDING_APPROVAL","pendingChangeId":42,"pendingChangeNumber":"PC-000042","message":"Change staged for approval. Use GET /approvals/42 to check status."},"correlationId":"e5f6a7b8-c9d0-1234-ef12-3456789abcde"}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky search bar -->
+    <div class="card shadow-sm mb-3 sticky-search header-zone">
+      <div class="card-body">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-md-5">
+            <input id="searchBox" class="form-control form-control-lg" type="text"
+                   placeholder="Search e.g. sku, RFQ, /orders, StockQuantity, TierPrice, GiftCard, ping..." />
+            <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>K</kbd> focus &nbsp; <kbd>Esc</kbd> clear</span>
+          </div>
+          <div class="col-12 col-md-3">
+            <select id="jumpToSelect" class="form-select jump-to-dropdown"><option value="">Jump to section&hellip;</option></select>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="d-flex gap-2">
+              <button id="expandAllBtn" class="btn btn-outline-secondary w-100">Expand all</button>
+              <button id="collapseAllBtn" class="btn btn-outline-secondary w-100">Collapse all</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-2 header-info">
+          <strong>Required headers (all endpoints):</strong>
+          <code>X-Integration-Key</code> (auth),
+          <code>X-Correlation-Id</code> (optional; server generates if absent),
+          <code>X-Store-Id</code> or <code>?storeId=</code> (optional; defaults to current store).
+          <strong>Write endpoints also require:</strong> <code>Idempotency-Key</code>.
+        </div>
+      </div>
+    </div>
+
+    <div id="summary" class="small-muted mb-2"></div>
+    <div class="accordion" id="functionsAccordion"></div>
+
+    <div class="small-muted mt-4">
+      Base path: <span class="mono">/api/integration/v1/...</span> &mdash; kept separate from Nopcommerce native APIs.
+      External refs stored in plugin table <code>Acgs_ExternalReference</code> (canonical lookup) with optional GenericAttribute mirror.
+    </div>
+
+    <!-- NS Contract Summary Table -->
+    <div class="card shadow-sm mt-4 mb-4" id="ns-contract-summary">
+      <div class="card-header" style="cursor:pointer" onclick="var b=this.nextElementSibling;var ic=this.querySelector('.ns-summary-chevron');if(b.style.display==='none'){b.style.display='';ic.textContent='\u25BE'}else{b.style.display='none';ic.textContent='\u25B8'}">
+        <h5 class="mb-0"><span class="ns-summary-chevron" style="margin-right:.4em;font-size:.85em">&#x25B8;</span>NetSuite Contract Summary &mdash; Minimum Fields Required by NetSuite</h5>
+        <div class="small-muted">Click to expand. This table shows only the fields that NetSuite must have in its system to fulfill each functional area. Toggle "Show NS contract" in the settings panel (&#x2699;) to see per-endpoint contract badges in the field tables above.</div>
+      </div>
+      <div class="card-body" style="display:none">
+        <div class="mb-3">
+          <strong>Legend:</strong>
+          <span class="badge badge-ns-required">ERP Required</span> NetSuite <strong>must</strong> provide this field &mdash; integration fails without it.
+          <span class="badge badge-ns-optional ms-2">ERP Optional</span> NetSuite <em>can</em> provide this &mdash; enriches data but has server defaults.
+          <span class="badge badge-nop-internal ms-2">Nop Internal</span> Server-side only &mdash; NetSuite never sees or sends this.
+          <span class="badge badge-auto-generated ms-2">Auto-Gen</span> Plugin auto-creates (audit trails, pending changes, URL slugs).
+        </div>
+        <div id="contractSummaryTables"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- JS modules extracted from inline script for maintainability -->
+  <!-- Data files (must load before renderer) -->
+  <script src="js/data-integration-spec.js"></script>
+  <script src="js/data-proposed-additions.js"></script>
+  <script src="js/data-payload-examples.js"></script>
+
+  <!-- Pure rendering/helper functions -->
+  <script src="js/renderer.js"></script>
+
+  <!-- App initialization, UI components, and contract classification -->
+  <script src="js/data-contract-classification.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
