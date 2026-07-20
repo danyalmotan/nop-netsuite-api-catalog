@@ -30,6 +30,17 @@ const integrationSpec = [
       },
       {
         method: "GET",
+        path: "/api/integration/v1/meta/readiness",
+        direction: "middleware → nop (health check)",
+        scope: "meta.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Proves the database is reachable, not just that the process is alive. Distinct from ping, which never touches the database.",
+        versionNotes: ["Runs a lightweight query against the integration-key table. Returns 503 meta.not_ready if the database is not reachable.", "Added for audit #28 (observability)."],
+        fields: { "4.60": [], "4.90": [] }
+      },
+      {
+        method: "GET",
         path: "/api/integration/v1/meta/capabilities",
         direction: "middleware → nop (discovery)",
         scope: "meta.read",
