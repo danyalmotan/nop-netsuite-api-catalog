@@ -60,8 +60,8 @@
         </div>
       </div>
       <div class="text-md-end small-muted">
-        Spec version: <strong id="specVersion">v1.6.4</strong> &nbsp;|&nbsp; Nopcommerce: 4.60 / 4.90
-        <br>Last updated: <strong id="lastUpdated">2026-07-20 14:04 SAST</strong>
+        Spec version: <strong id="specVersion">v1.6.5</strong> &nbsp;|&nbsp; Nopcommerce: 4.60 / 4.90
+        <br>Last updated: <strong id="lastUpdated">2026-07-20 15:30 SAST</strong>
       </div>
     </div>
 
@@ -132,6 +132,14 @@
             <pre>{"success":true,"data":{"status":"PENDING_APPROVAL","pendingChangeId":42,"pendingChangeNumber":"PC-000042","message":"Change staged for approval. Use GET /approvals/42 to check status."},"correlationId":"e5f6a7b8-c9d0-1234-ef12-3456789abcde"}</pre>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Response conventions -->
+    <div class="card shadow-sm mb-2 header-zone">
+      <div class="card-body py-2 header-info">
+        <strong>Paged list responses:</strong> <span class="small-muted">every paged GET returns <code>page</code>, <code>pageSize</code>, <code>totalCount</code>, plus the derived <code>totalPages</code>, <code>hasNextPage</code>, and <code>hasPreviousPage</code>.</span>
+        <br><strong>Security headers:</strong> <span class="small-muted">every integration response carries <code>X-Content-Type-Options: nosniff</code> and <code>X-Frame-Options: DENY</code>.</span>
       </div>
     </div>
 
