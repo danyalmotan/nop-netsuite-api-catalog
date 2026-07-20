@@ -60,8 +60,8 @@
         </div>
       </div>
       <div class="text-md-end small-muted">
-        Spec version: <strong id="specVersion">v1.6.3</strong> &nbsp;|&nbsp; Nopcommerce: 4.60 / 4.90
-        <br>Last updated: <strong id="lastUpdated">2026-04-01 11:10 SAST</strong>
+        Spec version: <strong id="specVersion">v1.6.4</strong> &nbsp;|&nbsp; Nopcommerce: 4.60 / 4.90
+        <br>Last updated: <strong id="lastUpdated">2026-07-20 14:04 SAST</strong>
       </div>
     </div>
 
@@ -241,6 +241,7 @@
                     <li><code>PUT /items/by-sku/{sku}/full-sync</code>: on existing products, omitted child objects and collections remain unchanged. Explicit empty arrays on <code>categories</code>, <code>tags</code>, <code>specifications</code>, <code>attributes</code>, <code>images</code>, and <code>combinations</code> mean clear and replace that collection. Clear explicit store mappings by sending <code>{ "allStores": true }</code>.</li>
                     <li>Use <code>null</code> only to clear optional scalar, date, or text fields. Sending <code>null</code> for required or non-nullable fields, or for related collections and mapped entities, must return <code>422 VALIDATION_ERROR</code>.</li>
                     <li>Empty string may be used to clear optional free-text fields such as admin comments and meta text. SEO slug behavior remains explicit through <code>PUT /items/by-sku/{sku}/seo-slug</code>.</li>
+                    <li>Do not use an empty string as a placeholder for a number or boolean. Omit an unknown optional field, or send its real JSON type (for example <code>true</code>, <code>12.5</code>, or <code>3</code> without quotes).</li>
                   </ul>
                 </div>
               </div>
@@ -255,7 +256,7 @@
                   <strong>Parent product routes</strong>
                   <ul class="mb-0 mt-1">
                     <li>Endpoints shaped like <code>GET</code>, <code>PUT</code>, or <code>PATCH /api/integration/v1/items/by-sku/{sku}</code> treat <code>{sku}</code> as the parent or base product SKU.</li>
-                    <li>For a product such as <code>BAS3000</code> with combinations like <code>BAS3000-GN-XL</code>, call product routes with <code>BAS3000</code>, not the child SKU.</li>
+                    <li>For a product such as <code>BAS3000</code> with combinations like <code>BAS3000/BK/SML</code>, call product routes with <code>BAS3000</code>, not the child SKU.</li>
                     <li>This same parent-SKU rule applies to related product routes such as <code>/attributes</code>, <code>/combinations</code>, <code>/images</code>, <code>/seo-slug</code>, <code>/full-sync</code>, and base pricing routes such as <code>/pricing/by-sku/{sku}</code>.</li>
                   </ul>
                 </div>
@@ -266,6 +267,7 @@
                     <li>Use <code>/items/by-sku/{sku}/combinations</code> or <code>/items/by-sku/{sku}/full-sync</code> to create and maintain child combinations under the parent product.</li>
                     <li>Use child SKUs directly on inventory endpoints only. Those endpoints auto-detect whether the SKU belongs to a base product or a <code>ProductAttributeCombination</code>.</li>
                     <li>Variant-specific price overrides and stock belong on the combination record, not on the parent product route. Use <code>combinations[].overriddenPrice</code> and variant stock updates for child SKUs.</li>
+                    <li>Slash-delimited child SKUs are supported. SKUs must contain no whitespace, and slash segments may not be empty. Segment codes such as colour and size remain company-defined; the API does not impose a fixed code list.</li>
                   </ul>
                 </div>
               </div>

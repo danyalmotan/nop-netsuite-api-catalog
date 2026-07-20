@@ -15,7 +15,7 @@ const integrationSpec = [
   {
     key: "meta",
     title: "Meta / operations",
-    description: "Health checks, capability discovery, and approval workflow endpoints used by middleware and admin.",
+    description: "Health checks, capability discovery, and read-only approval-queue endpoints. Approve/reject are performed by a signed-in admin in the nopCommerce backend (not the integration API), so a machine key cannot self-approve its own staged changes (separation of duties).",
     endpoints: [
       {
         method: "GET",
@@ -47,7 +47,7 @@ const integrationSpec = [
         idempotencyRequired: false,
         approvalRequired: false,
         purpose: "List pending approval changes (staged product/pricing/voucher updates). Supports pagination and filtering by entityType, status, date range.",
-        versionNotes: ["Reads from plugin table Acgs_PendingChange."],
+        versionNotes: ["Reads from plugin table Acgs_PendingChange.", "Tenant-isolated: an integration key sees only the changes it submitted. The admin UI sees all keys' changes."],
         fields: {
           "4.60": [
             { table: "Acgs_PendingChange", field: "PendingChangeNumber", required: true },
@@ -73,31 +73,29 @@ const integrationSpec = [
         idempotencyRequired: false,
         approvalRequired: false,
         purpose: "Get full detail of a pending change including field-level diffs (Acgs_PendingChangeField) and raw payload.",
-        versionNotes: [],
+        versionNotes: ["Tenant-isolated: a key may read only its own change; another key's id returns 404 (not-found) rather than disclosing existence."],
         fields: { "4.60": [], "4.90": [] }
       },
       {
-        method: "POST",
-        path: "/api/integration/v1/approvals/{pendingChangeId}/approve",
-        direction: "admin / internal",
-        scope: "approvals.write",
-        idempotencyRequired: true,
-        idempotencyRecipe: "Approval:{pendingChangeId}:approve",
+        method: "ADMIN UI",
+        path: "nopCommerce admin → Acgs → Approval queue (approve)",
+        direction: "admin UI (nopCommerce backend)",
+        scope: "admin permission: ManagePlugins",
+        idempotencyRequired: false,
         approvalRequired: false,
-        purpose: "Approve a pending change. Triggers the apply pipeline (updates live nop entity via nop services).",
-        versionNotes: ["Returns APPLIED on success, FAILED + error on exception. Retryable."],
+        purpose: "Approve a pending change; triggers the apply pipeline (updates the live nop entity via nop services). Performed by a signed-in admin, whose identity is recorded as the reviewer. NOT exposed on the integration API — a machine key has no reviewer identity and must not be able to self-approve its own staged changes (separation of duties).",
+        versionNotes: ["Removed from the integration API (was POST /approvals/{pendingChangeId}/approve). Use the admin approval queue."],
         fields: { "4.60": [], "4.90": [] }
       },
       {
-        method: "POST",
-        path: "/api/integration/v1/approvals/{pendingChangeId}/reject",
-        direction: "admin / internal",
-        scope: "approvals.write",
-        idempotencyRequired: true,
-        idempotencyRecipe: "Approval:{pendingChangeId}:reject",
+        method: "ADMIN UI",
+        path: "nopCommerce admin → Acgs → Approval queue (reject)",
+        direction: "admin UI (nopCommerce backend)",
+        scope: "admin permission: ManagePlugins",
+        idempotencyRequired: false,
         approvalRequired: false,
-        purpose: "Reject a pending change with a required rejection reason.",
-        versionNotes: [],
+        purpose: "Reject a pending change with a required rejection reason. Performed by a signed-in admin. NOT exposed on the integration API (see approve, above).",
+        versionNotes: ["Removed from the integration API (was POST /approvals/{pendingChangeId}/reject). Use the admin approval queue."],
         fields: { "4.60": [], "4.90": [] }
       }
     ]
@@ -263,14 +261,14 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:Item:{externalItemId}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Upsert product by SKU. If approval is enabled, the change is staged in Acgs_PendingChange and returns 202 PENDING_APPROVAL. If approval is disabled, the change is applied immediately via IProductService and returns 200 OK. This endpoint does not create related entities such as categories, attributes, combinations, images, vendors, or manufacturers; use the dedicated sub-resource endpoints or the composite full-sync endpoint for those.",
+        purpose: "Upsert product by SKU. If approval is enabled, the change is staged in Acgs_PendingChange and returns 202 PENDING_APPROVAL. If approval is disabled, the change is applied immediately via IProductService and returns 200 OK. This endpoint sets the product's own scalar fields, including vendorId (assigning the product to an existing vendor). It does not create related entities such as categories, attributes, combinations, images, or manufacturer mappings; use the dedicated sub-resource endpoints or the composite full-sync endpoint for those.",
         versionNotes: [
           "Canonical request body defined in Part 6 §6.3.2.1 (ItemUpsertRequest schema).",
           "Covers: name, single-language descriptions, identifiers, pricing, inventory, shipping, tax, lifecycle, meta, externalReferences, and storefront display controls.",
           "Replaces old POST /items (create) and PUT /items/{skuOrId} (update) — single upsert endpoint.",
           "The {sku} path value identifies the parent/base product SKU. Do not pass a variant or combination SKU here; create and maintain child SKUs through /items/by-sku/{sku}/combinations or /items/by-sku/{sku}/full-sync.",
           "This endpoint does not create or update UrlRecord (SEO slug); use PUT /items/by-sku/{sku}/seo-slug or full-sync.",
-          "This endpoint does not set VendorId or manufacturer mappings; use the vendor/manufacturer endpoints or full-sync.",
+          "vendorId is set directly by this endpoint (0 or null = no vendor). Manufacturer MAPPINGS are not set here (manufacturerPartNumber, a plain text field, is); use the manufacturer endpoints or full-sync to assign a manufacturer.",
           "Single-language contract: name, shortDescription, fullDescription, and meta fields represent one live storefront value. Localized translation arrays are intentionally out of scope in v1.6.1.",
           "For existing products, omitted optional scalar fields remain unchanged. For new products, omitted optional scalar fields fall back to nop defaults.",
           "Use null only to clear optional scalar/date/text fields where supported. Sending null for required or non-nullable fields, or for related collections and mapped entities, returns 422 VALIDATION_ERROR.",
@@ -510,27 +508,23 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemCat:{externalItemId}:{categorySetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set category assignments for a product by SKU. Mode: REPLACE (remove all existing then assign) or MERGE (add missing, keep existing). Uses categoryId or category name for lookup.",
+        purpose: "Replace the complete set of category assignments for a product by SKU (full replace \u2014 send the entire array; an empty array clears all). Categories resolve by categoryPath; missing levels are auto-created.",
         versionNotes: ["Creates Product_Category_Mapping rows. If approval enabled, stages in Acgs_PendingChange."],
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "categories", required: true, type: "object[]", notes: "Array of category assignments" },
-            { table: "categories[]", field: "categoryName", required: true, type: "string", notes: "Server resolves to CategoryId" },
-            { table: "categories[]", field: "categoryPath", required: false, type: "string", notes: "Hierarchical path e.g. 'Clothing/Shirts'; auto-creates missing levels" },
+            { table: "categories[]", field: "categoryPath", required: true, type: "string", notes: "Hierarchical path e.g. 'Clothing/Shirts'; auto-creates missing levels" },
             { table: "categories[]", field: "displayOrder", required: false, type: "int" },
-            { table: "categories[]", field: "isFeaturedProduct", required: false, type: "bool" },
+            { table: "categories[]", field: "isFeatured", required: false, type: "bool" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "categories", required: true, type: "object[]", notes: "Array of category assignments" },
-            { table: "categories[]", field: "categoryName", required: true, type: "string", notes: "Server resolves to CategoryId" },
-            { table: "categories[]", field: "categoryPath", required: false, type: "string", notes: "Hierarchical path e.g. 'Clothing/Shirts'; auto-creates missing levels" },
+            { table: "categories[]", field: "categoryPath", required: true, type: "string", notes: "Hierarchical path e.g. 'Clothing/Shirts'; auto-creates missing levels" },
             { table: "categories[]", field: "displayOrder", required: false, type: "int" },
-            { table: "categories[]", field: "isFeaturedProduct", required: false, type: "bool" },
+            { table: "categories[]", field: "isFeatured", required: false, type: "bool" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ]
         }
@@ -557,6 +551,17 @@ const integrationSpec = [
             { table: "ProductAttribute", field: "Description", required: false }
           ]
         }
+      },
+      {
+        method: "GET",
+        path: "/api/integration/v1/attributes/by-name/{name}",
+        direction: "nop → NetSuite (read)",
+        scope: "items.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Look up a single global product attribute by exact name (404 if not found). Companion read for the PUT upsert-by-name endpoint below.",
+        versionNotes: ["Code-only until this revision; documented here for parity with the PUT upsert-by-name endpoint."],
+        fields: { "4.60": [], "4.90": [] }
       },
       {
         method: "PUT",
@@ -623,19 +628,19 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemAttr:{externalItemId}:{attrSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set attribute mappings + values for a product by SKU. Mode: REPLACE (remove all existing mappings/values then insert) or MERGE (upsert by attribute name). Creates global ProductAttribute if not found.",
+        purpose: "Replace the complete set of attribute mappings + values for a product by SKU (full replace \u2014 send the entire array). Global ProductAttribute definitions are created by name if not found.",
         versionNotes: [
           "Each entry specifies: attributeName (resolved to ProductAttributeId), controlType, isRequired, and values array.",
+          "Canonical controlType values are dropdown, radio, checkboxes, textbox, multiline_textbox, datepicker, file_upload, color_squares, image_squares, and readonly_checkboxes. Matching variants such as DropdownList, dropdown_list, ColorSquares, date_picker, and fileUpload are normalized case-insensitively.",
           "Values include: name, priceAdjustment, weightAdjustment, cost, isPreSelected, displayOrder.",
           "If approval enabled, stages in Acgs_PendingChange."
         ],
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "attributes", required: true, type: "object[]", notes: "Array of attribute mappings" },
             { table: "attributes[]", field: "attributeName", required: true, type: "string", notes: "Server resolves/creates global ProductAttribute" },
-            { table: "attributes[]", field: "controlType", required: false, type: "string", notes: "'DropdownList' (default), 'ColorSquares', 'RadioList', etc." },
+            { table: "attributes[]", field: "controlType", required: false, type: "string", notes: "Canonical: dropdown (default), radio, checkboxes, textbox, multiline_textbox, datepicker, file_upload, color_squares, image_squares, readonly_checkboxes. Similar casing/separator variants are normalized." },
             { table: "attributes[]", field: "isRequired", required: false, type: "bool" },
             { table: "attributes[]", field: "displayOrder", required: false, type: "int" },
             { table: "attributes[]", field: "textPrompt", required: false, type: "string" },
@@ -648,10 +653,9 @@ const integrationSpec = [
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "attributes", required: true, type: "object[]", notes: "Array of attribute mappings" },
             { table: "attributes[]", field: "attributeName", required: true, type: "string", notes: "Server resolves/creates global ProductAttribute" },
-            { table: "attributes[]", field: "controlType", required: false, type: "string", notes: "'DropdownList' (default), 'ColorSquares', 'RadioList', etc." },
+            { table: "attributes[]", field: "controlType", required: false, type: "string", notes: "Canonical: dropdown (default), radio, checkboxes, textbox, multiline_textbox, datepicker, file_upload, color_squares, image_squares, readonly_checkboxes. Similar casing/separator variants are normalized." },
             { table: "attributes[]", field: "isRequired", required: false, type: "bool" },
             { table: "attributes[]", field: "displayOrder", required: false, type: "int" },
             { table: "attributes[]", field: "textPrompt", required: false, type: "string" },
@@ -717,9 +721,10 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemCombo:{externalItemId}:{comboSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set attribute combinations (variants) for a product by SKU. Mode: REPLACE or MERGE. Each combination is identified by its variant SKU or attribute-value set. Maps NetSuite child/matrix items to nop ProductAttributeCombination rows.",
+        purpose: "Replace the complete set of attribute combinations (variants) for a product by SKU (full replace \u2014 send the entire array). Each combination is identified by its variantSku and attribute-value set. Maps NetSuite child/matrix items to nop ProductAttributeCombination rows.",
         versionNotes: [
           "The {sku} path value is always the parent/base product SKU; child SKUs belong inside combinations[].variantSku.",
+          "Slash-delimited child SKUs such as BAS3000/BK/SML are supported. Whitespace and empty slash segments are rejected; colour/size code vocabularies are company-defined and are not hard-coded by the API.",
           "Each combination entry specifies: variantSku, attributes (name→value pairs), stockQuantity, overriddenPrice, gtin, mpn, allowOutOfStockOrders.",
           "Attribute mappings (Product_ProductAttribute_Mapping + values) must exist before combinations can reference them.",
           "Server builds AttributesXml from name→value pairs by resolving Product_ProductAttribute_Mapping IDs and ProductAttributeValue IDs.",
@@ -729,9 +734,8 @@ const integrationSpec = [
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "combinations", required: true, type: "object[]", notes: "Array of variant/combination entries" },
-            { table: "combinations[]", field: "variantSku", required: false, type: "string", notes: "Variant/child SKU" },
+            { table: "combinations[]", field: "variantSku", required: true, type: "string", notes: "Unique variant/child SKU; '/' supported, no whitespace or empty slash segments" },
             { table: "combinations[]", field: "attributes", required: true, type: "object", notes: "Name→value pairs e.g. {'Color':'White','Size':'M'}; server builds AttributesXml" },
             { table: "combinations[]", field: "stockQuantity", required: false, type: "int" },
             { table: "combinations[]", field: "allowOutOfStockOrders", required: false, type: "bool" },
@@ -745,9 +749,8 @@ const integrationSpec = [
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "combinations", required: true, type: "object[]", notes: "Array of variant/combination entries" },
-            { table: "combinations[]", field: "variantSku", required: false, type: "string", notes: "Variant/child SKU" },
+            { table: "combinations[]", field: "variantSku", required: true, type: "string", notes: "Unique variant/child SKU; '/' supported, no whitespace or empty slash segments" },
             { table: "combinations[]", field: "attributes", required: true, type: "object", notes: "Name→value pairs e.g. {'Color':'White','Size':'M'}; server builds AttributesXml" },
             { table: "combinations[]", field: "stockQuantity", required: false, type: "int" },
             { table: "combinations[]", field: "allowOutOfStockOrders", required: false, type: "bool" },
@@ -958,6 +961,17 @@ const integrationSpec = [
         }
       },
       {
+        method: "GET",
+        path: "/api/integration/v1/vendors/by-name/{name}",
+        direction: "nop → NetSuite (read)",
+        scope: "items.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Look up a single vendor by exact name (404 if not found). Companion read for the PUT upsert-by-name endpoint below.",
+        versionNotes: ["Code-only until this revision; documented here for parity with the PUT upsert-by-name endpoint."],
+        fields: { "4.60": [], "4.90": [] }
+      },
+      {
         method: "PUT",
         path: "/api/integration/v1/vendors/by-name/{name}",
         direction: "NetSuite → nop (push/upsert)",
@@ -1029,6 +1043,17 @@ const integrationSpec = [
         }
       },
       {
+        method: "GET",
+        path: "/api/integration/v1/manufacturers/by-name/{name}",
+        direction: "nop → NetSuite (read)",
+        scope: "items.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Look up a single manufacturer by exact name (404 if not found). Companion read for the PUT upsert-by-name endpoint below.",
+        versionNotes: ["Code-only until this revision; documented here for parity with the PUT upsert-by-name endpoint."],
+        fields: { "4.60": [], "4.90": [] }
+      },
+      {
         method: "PUT",
         path: "/api/integration/v1/manufacturers/by-name/{name}",
         direction: "NetSuite → nop (push/upsert)",
@@ -1065,6 +1090,17 @@ const integrationSpec = [
         }
       },
       {
+        method: "GET",
+        path: "/api/integration/v1/items/by-sku/{sku}/manufacturers",
+        direction: "nop → NetSuite (read)",
+        scope: "items.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Read the current manufacturer assignment(s) for a product by SKU. Companion read for the PUT replace endpoint below.",
+        versionNotes: ["Code-only until this revision; documented here for parity with the PUT replace endpoint."],
+        fields: { "4.60": [], "4.90": [] }
+      },
+      {
         method: "PUT",
         path: "/api/integration/v1/items/by-sku/{sku}/manufacturers",
         direction: "NetSuite → nop (push/upsert)",
@@ -1072,24 +1108,22 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemManuf:{externalItemId}:{manufSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set manufacturer assignments for a product by SKU. Mode: REPLACE or MERGE. Resolves manufacturer by name (creates if not found). Creates Product_Manufacturer_Mapping rows.",
+        purpose: "Replace the complete set of manufacturer assignments for a product by SKU (full replace \u2014 send the entire array). Assignment is by manufacturerId; obtain the id via PUT /manufacturers/by-name/{name}.",
         versionNotes: ["Creates Manufacturer + UrlRecord if manufacturer does not exist. If approval is enabled, the change is staged in Acgs_PendingChange."],
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "manufacturers", required: true, type: "object[]", notes: "Array of manufacturer assignments" },
-            { table: "manufacturers[]", field: "name", required: true, type: "string", notes: "Server resolves/creates Manufacturer + UrlRecord" },
-            { table: "manufacturers[]", field: "isFeaturedProduct", required: false, type: "bool" },
+            { table: "manufacturers[]", field: "manufacturerId", required: true, type: "int", notes: "Resolved nopCommerce manufacturer id (obtain via PUT /manufacturers/by-name/{name})" },
+            { table: "manufacturers[]", field: "isFeatured", required: false, type: "bool" },
             { table: "manufacturers[]", field: "displayOrder", required: false, type: "int" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "manufacturers", required: true, type: "object[]", notes: "Array of manufacturer assignments" },
-            { table: "manufacturers[]", field: "name", required: true, type: "string", notes: "Server resolves/creates Manufacturer + UrlRecord" },
-            { table: "manufacturers[]", field: "isFeaturedProduct", required: false, type: "bool" },
+            { table: "manufacturers[]", field: "manufacturerId", required: true, type: "int", notes: "Resolved nopCommerce manufacturer id (obtain via PUT /manufacturers/by-name/{name})" },
+            { table: "manufacturers[]", field: "isFeatured", required: false, type: "bool" },
             { table: "manufacturers[]", field: "displayOrder", required: false, type: "int" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ]
@@ -1167,6 +1201,9 @@ const integrationSpec = [
         versionNotes: [
           "This is the recommended endpoint for NetSuite/supplier full product pushes — eliminates multi-call choreography.",
           "The {sku} path value identifies the parent/base product SKU. Child or matrix SKUs belong inside combinations[].variantSku and are created or updated beneath that parent product.",
+          "Use variantSku (legacy sku and variant_sku are accepted as input aliases). Slash-delimited SKUs such as BAS3000/BK/SML are supported; whitespace and empty slash segments are rejected, while segment code vocabularies remain company-defined.",
+          "JSON types are strict on write: booleans and numbers must not be quoted or represented by empty strings. Omit unknown optional fields; empty strings are only meaningful when deliberately clearing optional text.",
+          "Unknown request properties are rejected with 422 so misspellings or obsolete wrapper objects are not silently ignored.",
           "Server execution order: 1) Vendor upsert → 2) Manufacturer upsert → 3) Product upsert (with VendorId) → 4) UrlRecord (SEO slug) → 5) Category hierarchy upsert + Product_Category_Mapping → 6) Product_Manufacturer_Mapping → 7) StoreMapping upsert → 8) ProductTag upsert + Product_ProductTag_Mapping → 9) SpecificationAttribute / SpecificationAttributeOption upsert + Product_SpecificationAttribute_Mapping → 10) Global ProductAttribute upsert → 11) Product_ProductAttribute_Mapping + ProductAttributeValue (with ColorSquaresRgb) → 12) Image upload (Picture + PictureBinary + Product_Picture_Mapping) → 13) ProductAttributeCombination (with resolved AttributesXml) → 14) Combination-picture linking (4.60: PictureId FK; 4.90: ProductAttributeCombinationPicture join table).",
           "All steps execute in a single DB transaction — if any step fails, the entire operation rolls back.",
           "Category paths support hierarchical creation (e.g. 'Clothing/Shirts/Golf Shirts' creates all three levels if missing).",
@@ -1213,7 +1250,7 @@ const integrationSpec = [
             { table: "manufacturer", field: "name/description/published", required: false, type: "string|bool" },
             { table: "(request body)", field: "categories", required: false, type: "object[]", notes: "Array of category assignments" },
             { table: "categories[]", field: "categoryPath", required: true, type: "string", notes: "e.g. 'Clothing/Shirts/Golf Shirts'; auto-creates missing levels" },
-            { table: "categories[]", field: "displayOrder/isFeaturedProduct", required: false, type: "int|bool" },
+            { table: "categories[]", field: "displayOrder/isFeatured", required: false, type: "int|bool" },
             { table: "(request body)", field: "storeMappings", required: false, type: "object", notes: "Optional website allocation: { allStores: bool, stores: [{storeId, storeName}] }" },
             { table: "storeMappings", field: "allStores", required: false, type: "bool", notes: "true clears StoreMapping rows and makes the product visible across all stores" },
             { table: "storeMappings", field: "stores", required: false, type: "object[]", notes: "Explicit per-store visibility when allStores is false" },
@@ -1224,7 +1261,7 @@ const integrationSpec = [
             { table: "specifications[]", field: "allowFiltering/showOnProductPage/displayOrder", required: false, type: "bool|bool|int" },
             { table: "(request body)", field: "attributes", required: false, type: "object[]", notes: "Array of attribute mappings; server upserts global ProductAttribute by name" },
             { table: "attributes[]", field: "attributeName", required: true, type: "string", notes: "Server resolves/creates global ProductAttribute" },
-            { table: "attributes[]", field: "controlType/isRequired/displayOrder/textPrompt", required: false, type: "string|bool|int" },
+            { table: "attributes[]", field: "controlType/isRequired/displayOrder/textPrompt", required: false, type: "string|bool|int", notes: "Canonical controlType values: dropdown, radio, checkboxes, textbox, multiline_textbox, datepicker, file_upload, color_squares, image_squares, readonly_checkboxes; similar casing/separator variants are normalized" },
             { table: "attributes[]", field: "values", required: true, type: "object[]", notes: "Array of attribute values" },
             { table: "attributes[].values[]", field: "name/colorSquaresRgb/priceAdjustment/weightAdjustment/cost/isPreSelected/displayOrder", required: false, type: "string|decimal|bool|int" },
             { table: "(request body)", field: "images", required: false, type: "object[]", notes: "Array of images; each has imageUrl OR base64Data" },
@@ -1232,7 +1269,7 @@ const integrationSpec = [
             { table: "images[]", field: "base64Data", required: false, type: "string", notes: "Base64-encoded binary" },
             { table: "images[]", field: "mimeType/altAttribute/titleAttribute/seoFilename/displayOrder", required: false, type: "string|int" },
             { table: "(request body)", field: "combinations", required: false, type: "object[]", notes: "Array of variant/combination entries" },
-            { table: "combinations[]", field: "variantSku", required: false, type: "string", notes: "Variant/child SKU" },
+            { table: "combinations[]", field: "variantSku", required: true, type: "string", notes: "Unique variant/child SKU; '/' supported, no whitespace or empty slash segments" },
             { table: "combinations[]", field: "attributes", required: true, type: "object", notes: "Name→value pairs e.g. {'Color':'White','Size':'M'}" },
             { table: "combinations[]", field: "stockQuantity/overriddenPrice/gtin/manufacturerPartNumber", required: false, type: "int|decimal|string" },
             { table: "combinations[]", field: "imageIndexes", required: false, type: "int[]", notes: "Indexes into top-level images[] array; 4.60 uses first index only (single PictureId FK)" },
@@ -1267,7 +1304,7 @@ const integrationSpec = [
             { table: "manufacturer", field: "name/description/published", required: false, type: "string|bool" },
             { table: "(request body)", field: "categories", required: false, type: "object[]", notes: "Array of category assignments" },
             { table: "categories[]", field: "categoryPath", required: true, type: "string", notes: "e.g. 'Clothing/Shirts/Golf Shirts'; auto-creates missing levels" },
-            { table: "categories[]", field: "displayOrder/isFeaturedProduct", required: false, type: "int|bool" },
+            { table: "categories[]", field: "displayOrder/isFeatured", required: false, type: "int|bool" },
             { table: "(request body)", field: "storeMappings", required: false, type: "object", notes: "Optional website allocation: { allStores: bool, stores: [{storeId, storeName}] }" },
             { table: "storeMappings", field: "allStores", required: false, type: "bool", notes: "true clears StoreMapping rows and makes the product visible across all stores" },
             { table: "storeMappings", field: "stores", required: false, type: "object[]", notes: "Explicit per-store visibility when allStores is false" },
@@ -1406,7 +1443,7 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemStore:{externalItemId}:{storeSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set store assignments for a product by SKU. Supports REPLACE or MERGE modes, or allStores=true to make the product visible across every store.",
+        purpose: "Set store visibility for a product by SKU (full replace). Use allStores=true for all-store visibility, or supply the complete stores[] set.",
         versionNotes: [
           "If allStores is true, sets LimitedToStores=false and removes StoreMapping rows for the product.",
           "If allStores is false or omitted, sets LimitedToStores=true and manages explicit StoreMapping rows.",
@@ -1417,7 +1454,6 @@ const integrationSpec = [
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
             { table: "(request body)", field: "allStores", required: false, type: "bool", notes: "If true, clears store mappings and makes the product visible everywhere" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "stores", required: false, type: "object[]", notes: "Array of store assignments when allStores is false" },
             { table: "stores[]", field: "storeId", required: false, type: "int", notes: "Provide storeId or storeName" },
             { table: "stores[]", field: "storeName", required: false, type: "string", notes: "Server resolves Store.Id from Store.Name" },
@@ -1426,7 +1462,6 @@ const integrationSpec = [
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
             { table: "(request body)", field: "allStores", required: false, type: "bool", notes: "If true, clears store mappings and makes the product visible everywhere" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "stores", required: false, type: "object[]", notes: "Array of store assignments when allStores is false" },
             { table: "stores[]", field: "storeId", required: false, type: "int", notes: "Provide storeId or storeName" },
             { table: "stores[]", field: "storeName", required: false, type: "string", notes: "Server resolves Store.Id from Store.Name" },
@@ -1484,7 +1519,7 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemTag:{externalItemId}:{tagSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set product tag assignments for a product by SKU. Supports REPLACE or MERGE modes and creates missing ProductTag records when needed.",
+        purpose: "Replace the complete set of product tags for a product by SKU (full replace \u2014 send the entire array; an empty array clears all). Missing ProductTag records are created as needed.",
         versionNotes: [
           "Used to automate frontend ribbons and badges such as Recyclable, PET, WSL, and New Arrival.",
           "Tag names are matched case-insensitively; missing ProductTag rows are created automatically.",
@@ -1493,13 +1528,11 @@ const integrationSpec = [
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "tags", required: true, type: "string[]", notes: "Array of tag names e.g. ['Recyclable', 'WSL', 'PET']" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "tags", required: true, type: "string[]", notes: "Array of tag names e.g. ['Recyclable', 'WSL', 'PET']" },
             { table: "Acgs_PendingChange", field: "(staged if approval enabled)", required: false }
           ]
@@ -1557,7 +1590,7 @@ const integrationSpec = [
         idempotencyRequired: true,
         idempotencyRecipe: "NS:ItemSpec:{externalItemId}:{specSetHash}:{lastModifiedUtc}",
         approvalRequired: true,
-        purpose: "Set specification attribute assignments for a product by SKU. Supports REPLACE or MERGE modes and creates missing specification attribute records when needed.",
+        purpose: "Replace the complete set of specification attributes for a product by SKU (full replace \u2014 send the entire array). Missing specification attribute records are created as needed.",
         versionNotes: [
           "Each entry specifies attributeName, optionValue, allowFiltering, showOnProductPage, and displayOrder.",
           "Missing SpecificationAttribute or SpecificationAttributeOption rows are created automatically.",
@@ -1566,7 +1599,6 @@ const integrationSpec = [
         fields: {
           "4.60": [
             { table: "Product", field: "SKU (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "specifications", required: true, type: "object[]", notes: "Array of specification attribute assignments" },
             { table: "specifications[]", field: "attributeName", required: true, type: "string", notes: "e.g. 'Material' or 'Certification'" },
             { table: "specifications[]", field: "optionValue", required: true, type: "string", notes: "e.g. 'Recycled PET' or 'FSC'" },
@@ -1577,7 +1609,6 @@ const integrationSpec = [
           ],
           "4.90": [
             { table: "Product", field: "Sku (from path)", required: true, type: "string" },
-            { table: "(request body)", field: "mode", required: false, type: "string", notes: "'REPLACE' (default) or 'MERGE'" },
             { table: "(request body)", field: "specifications", required: true, type: "object[]", notes: "Array of specification attribute assignments" },
             { table: "specifications[]", field: "attributeName", required: true, type: "string", notes: "e.g. 'Material' or 'Certification'" },
             { table: "specifications[]", field: "optionValue", required: true, type: "string", notes: "e.g. 'Recycled PET' or 'FSC'" },
@@ -1998,7 +2029,7 @@ const integrationSpec = [
   {
     key: "rfq",
     title: "RFQ (provider-based)",
-    description: "Request-for-quote. Provider-based: Native490 (RFQRequestQuote tables), Plugin, or Disabled. Returns 501 RFQ_NOT_SUPPORTED if disabled.",
+    description: "Request-for-quote. NOT IMPLEMENTED in this release — every RFQ action returns 501 RFQ_NOT_SUPPORTED (no fabricated success). The routes and field tables below reserve the intended provider-based contract (Native490 RFQRequestQuote tables / Plugin) for a future release.",
     endpoints: [
       {
         method: "GET", path: "/api/integration/v1/rfqs/requests?status={status}&sinceUtc={utc}&page={p}&pageSize={n}",
@@ -2042,7 +2073,7 @@ const integrationSpec = [
   {
     key: "quotes",
     title: "Quotes (provider-based)",
-    description: "Non-RFQ quote workflows. Provider-based: Legacy460 (NS_Quote* tables), Plugin, or Disabled. Returns 501 QUOTES_NOT_SUPPORTED if disabled.",
+    description: "Non-RFQ quote workflows. NOT IMPLEMENTED in this release — every Quotes action returns 501 QUOTES_NOT_SUPPORTED (no fabricated success). The routes and field tables below reserve the intended provider-based contract (Legacy460 NS_Quote* tables / Plugin) for a future release.",
     endpoints: [
       {
         method: "GET", path: "/api/integration/v1/quotes?page={p}&pageSize={n}",
@@ -2198,6 +2229,15 @@ const integrationSpec = [
             { table: "OrderNote", field: "Note/DisplayToCustomer", required: false }
           ]
         }
+      },
+      {
+        method: "POST", path: "/api/integration/v1/orders/by-order-number/{customOrderNumber}/status",
+        direction: "NetSuite → nop (push)", scope: "orders.write", idempotencyRequired: true,
+        idempotencyRecipe: "NS:SOStatus:{customOrderNumber}:{updatedOnUtc}:{orderStatusId}:{shippingStatusId}:{paymentStatusId}",
+        approvalRequired: false,
+        purpose: "Convenience alias of POST /orders/{orderId}/status for systems that store the customer-visible order number (e.g. \"ABA807101\") rather than the internal numeric order id. Same request/response contract.",
+        versionNotes: ["Code-only until this revision; documented here for parity with the by-id endpoint above."],
+        fields: { "4.60": [], "4.90": [] }
       }
     ]
   },
@@ -2890,6 +2930,17 @@ const integrationSpec = [
             { table: "MeasureDimension", field: "DisplayOrder", required: false }
           ]
         }
+      },
+      {
+        method: "GET",
+        path: "/api/integration/v1/reference/order-statuses",
+        direction: "middleware → nop (lookup)",
+        scope: "reference.read",
+        idempotencyRequired: false,
+        approvalRequired: false,
+        purpose: "Get all known order, shipping, and payment status ids with their enum names and human-readable labels — the reference values used by orderStatusId/shippingStatusId/paymentStatusId elsewhere in the API.",
+        versionNotes: ["Code-only until this revision; documented here for completeness. Values are derived from the nopCommerce OrderStatus/ShippingStatus/PaymentStatus enums, not a database table."],
+        fields: { "4.60": [], "4.90": [] }
       }
     ]
   },
